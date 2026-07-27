@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Standalone Expense Console — Gate 1</title>
+<style>
+/* ============================================================
+   THEME
+   ============================================================ */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#1b1d21; --muted:#6b7280;
+  --line:#e3e6ea; --accent:#0f766e; --accent-ink:#ffffff;
+  --warn:#b45309; --warn-bg:#fffbeb; --err:#b91c1c; --err-bg:#fef2f2;
+  --ok:#15803d; --ok-bg:#f0fdf4; --chip:#eef2f5;
+  --radius:10px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#14161a; --panel:#1c1f24; --ink:#e8eaed; --muted:#9aa2ad;
+    --line:#2c3138; --accent:#2dd4bf; --accent-ink:#08312d;
+    --warn:#fbbf24; --warn-bg:#2a2113; --err:#f87171; --err-bg:#2a1717;
+    --ok:#4ade80; --ok-bg:#132a1a; --chip:#262b31;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+header{
+  background:var(--panel); border-bottom:1px solid var(--line);
+  padding:14px 20px; display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+}
+header h1{font-size:17px; margin:0; font-weight:650}
+.badge{
+  font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  background:var(--accent); color:var(--accent-ink);
+  padding:3px 9px; border-radius:99px; font-weight:700;
+}
+.spacer{flex:1}
+.count{font-size:13px; color:var(--muted)}
+
+nav{
+  display:flex; gap:2px; padding:0 20px; background:var(--panel);
+  border-bottom:1px solid var(--line); overflow-x:auto;
+}
+nav button{
+  background:none; border:0; border-bottom:2px solid transparent;
+  padding:11px 15px; font-size:14px; color:var(--muted);
+  cursor:pointer; white-space:nowrap; font-family:inherit;
+}
+nav button:hover{color:var(--ink)}
+nav button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
+
+main{max-width:1180px; margin:0 auto; padding:22px 20px 80px}
+section[role=tabpanel][hidden]{display:none}
+
+.card{
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:var(--radius); padding:18px; margin-bottom:18px;
+}
+.card h2{margin:0 0 4px; font-size:15px; font-weight:650}
+.card h2+p.hint{margin-top:0}
+p.hint{color:var(--muted); font-size:13px; margin:0 0 14px}
+
+button.btn{
+  background:var(--accent); color:var(--accent-ink); border:0;
+  padding:9px 16px; border-radius:8px; font-size:14px; font-weight:600;
+  cursor:pointer; font-family:inherit;
+}
+button.btn:hover{filter:brightness(1.08)}
+button.btn.ghost{background:var(--chip); color:var(--ink)}
+button.btn.danger{background:var(--err-bg); color:var(--err)}
+button.btn:disabled{opacity:.45; cursor:not-allowed; filter:none}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+
+label.f{display:block; margin-bottom:12px}
+label.f > span{display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:600}
+input,select,textarea{
+  width:100%; padding:8px 10px; border:1px solid var(--line);
+  border-radius:8px; background:var(--bg); color:var(--ink);
+  font:inherit; font-size:14px;
+}
+textarea{min-height:60px; resize:vertical}
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0 14px}
+
+.drop{
+  border:2px dashed var(--line); border-radius:var(--radius);
+  padding:34px 18px; text-align:center; color:var(--muted); cursor:pointer;
+}
+.drop.over{border-color:var(--accent); background:var(--chip)}
+
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius)}
+table{border-collapse:collapse; width:100%; font-size:13px}
+th,td{padding:7px 10px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap}
+th{background:var(--chip); font-weight:650; font-size:12px; position:sticky; top:0}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right; font-family:var(--mono)}
+td.desc{white-space:normal; min-width:230px; max-width:380px}
+
+.note{padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:12px; border:1px solid}
+.note.ok{background:var(--ok-bg); color:var(--ok); border-color:currentColor}
+.note.warn{background:var(--warn-bg); color:var(--warn); border-color:currentColor}
+.note.err{background:var(--err-bg); color:var(--err); border-color:currentColor}
+.note b{font-weight:700}
+
+.chip{
+  display:inline-block; font-size:11px; padding:2px 7px; border-radius:99px;
+  background:var(--chip); color:var(--muted); font-weight:600;
+}
+.chip.high{background:var(--ok-bg); color:var(--ok)}
+.chip.inferred{background:var(--warn-bg); color:var(--warn)}
+.chip.verify{background:var(--err-bg); color:var(--err)}
+
+code,.mono{font-family:var(--mono); font-size:12.5px}
+pre{
+  background:var(--chip); padding:12px; border-radius:8px;
+  overflow-x:auto; font-family:var(--mono); font-size:12px; margin:0;
+}
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px}
+.kpi{background:var(--chip); border-radius:8px; padding:12px}
+.kpi .v{font-size:20px; font-weight:700; font-family:var(--mono)}
+.kpi .l{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-top:2px}
+.empty{text-align:center; color:var(--muted); padding:34px 12px; font-size:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Standalone Expense Console</h1>
+  <span class="badge" id="gateBadge">Gate 1</span>
+  <div class="spacer"></div>
+  <span class="count" id="hdrCount">0 rows</span>
+  <span class="count" id="hdrStore">—</span>
+</header>
+
+<nav role="tablist">
+  <button role="tab" data-tab="import"   aria-selected="true">1 · Import CSV</button>
+  <button role="tab" data-tab="entry"    aria-selected="false">2 · Add Entry</button>
+  <button role="tab" data-tab="ledger"   aria-selected="false">3 · Ledger</button>
+  <button role="tab" data-tab="export"   aria-selected="false">4 · Export</button>
+  <button role="tab" data-tab="contract" aria-selected="false">5 · Contract</button>
+</nav>
+
+<main>
+<div id="storeWarn"></div>
+
+<!-- ======================= 1 · IMPORT ======================= -->
+<section role="tabpanel" id="tab-import">
+  <div class="card">
+    <h2>Import a bank CSV</h2>
+    <p class="hint">Rule-based parsing — column names are detected automatically, nothing is sent anywhere. Every source row is either imported or listed with a reason.</p>
+    <div class="drop" id="drop">
+      <strong>Drop a .csv file here</strong><br>or click to choose
+      <input type="file" id="file" accept=".csv,.txt,text/csv" hidden>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <label style="font-size:13px"><input type="checkbox" id="optCredits" style="width:auto;margin-right:6px">Include credits (money in) as negative amounts</label>
+    </div>
+  </div>
+  <div id="importResult"></div>
+</section>
+
+<!-- ======================= 2 · ENTRY ======================== -->
+<section role="tabpanel" id="tab-entry" hidden>
+  <div class="card">
+    <h2 id="entryTitle">Add an expense</h2>
+    <p class="hint">Structured manual entry. Fields map directly onto the locked column contract.</p>
+    <form id="entryForm">
+      <input type="hidden" id="fId">
+      <div class="grid2">
+        <label class="f"><span>Date *</span><input type="date" id="fDate" required></label>
+        <label class="f"><span>Amount (KES) *</span><input type="number" id="fAmount" step="0.01" required placeholder="0.00"></label>
+        <label class="f"><span>Category *</span><select id="fCategory" required></select></label>
+        <label class="f"><span>Payee / Vendor</span><input type="text" id="fPayee" placeholder="e.g. Bamburi Cement"></label>
+      </div>
+      <label class="f"><span>Description *</span><input type="text" id="fDescription" required placeholder="What was this for?"></label>
+      <div class="grid2">
+        <label class="f"><span>Source</span><input type="text" id="fSource" placeholder="Manual"></label>
+        <label class="f"><span>Notes</span><input type="text" id="fNotes" placeholder="Optional"></label>
+      </div>
+      <div class="row">
+        <button type="submit" class="btn" id="entrySubmit">Save entry</button>
+        <button type="button" class="btn ghost" id="entryReset">Clear form</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ======================= 3 · LEDGER ======================= -->
+<section role="tabpanel" id="tab-ledger" hidden>
+  <div class="card">
+    <h2>Ledger</h2>
+    <p class="hint">Everything currently stored in this browser. Click a row to edit it.</p>
+    <div class="kpis" id="kpis"></div>
+  </div>
+  <div class="card">
+    <div class="row" style="margin-bottom:12px">
+      <input type="text" id="q" placeholder="Search description, payee, category…" style="flex:1;min-width:210px">
+      <select id="fCatFilter" style="width:auto;min-width:170px"></select>
+      <button class="btn danger" id="clearAll">Delete all</button>
+    </div>
+    <div id="ledgerOut"></div>
+  </div>
+</section>
+
+<!-- ======================= 4 · EXPORT ======================== -->
+<section role="tabpanel" id="tab-export" hidden>
+  <div class="card">
+    <h2>Export</h2>
+    <p class="hint">CSV is contract-locked: exactly the declared columns, in the declared order, every time. JSON is a full backup including internal fields.</p>
+    <div class="row">
+      <button class="btn" id="expCsv">Download CSV</button>
+      <button class="btn ghost" id="expJson">Download JSON backup</button>
+      <button class="btn ghost" id="impJson">Restore from JSON…</button>
+      <input type="file" id="jsonFile" accept=".json,application/json" hidden>
+    </div>
+  </div>
+  <div class="card">
+    <h2>CSV preview</h2>
+    <p class="hint">First 5 rows exactly as they will be written to disk.</p>
+    <pre id="csvPreview">No rows yet.</pre>
+  </div>
+</section>
+
+<!-- ======================= 5 · CONTRACT ====================== -->
+<section role="tabpanel" id="tab-contract" hidden>
+  <div class="card">
+    <h2>Column contract</h2>
+    <p class="hint">The single source of truth for CSV export. Change it here — never by editing the exported file.</p>
+    <div id="contractStatus"></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>CSV column</th><th>Maps to internal field</th></tr></thead>
+      <tbody id="contractRows"></tbody>
+    </table></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn ghost" id="contractReset">Reset to default contract</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Validate against a reference file</h2>
+    <p class="hint">Upload your reference export (e.g. <code>Simplified_Expenses_RUN…csv</code>). The console compares its header to the contract and lets you adopt it exactly.</p>
+    <div class="drop" id="refDrop">
+      <strong>Drop the reference .csv here</strong><br>or click to choose
+      <input type="file" id="refFile" accept=".csv,text/csv" hidden>
+    </div>
+    <div id="refResult" style="margin-top:14px"></div>
+  </div>
+</section>
+</main>
+
+<script>
+"use strict";
+/* ==================================================================
+   STANDALONE EXPENSE CONSOLE — GATE 1
+   Single file. No network. No API key. No build step.
+   Runs from file:// or any static host.
+
+   §0  Column contract  (the locked export shape)
+   §1  Store            (persistence)
+   §2  CSV read/write   (self-contained RFC4180 — no CDN)
+   §3  Column detection & normalisation
+   §4  Categorisation
+   §5  Import pipeline
+   §6  Manual entry
+   §7  Ledger
+   §8  Export
+   §9  Contract tab
+   §10 Boot
+   ================================================================== */
+
+/* ==================== §0  COLUMN CONTRACT ======================== */
+
+// Internal record fields available for mapping to a CSV column.
+const FIELDS = ["date","description","category","payee","amount","source","confidence","notes","id"];
+
+// PROVISIONAL until validated against the reference export.
+// Six columns, matching the reference file's shape (60 rows × 6 fields).
+const DEFAULT_CONTRACT = {
+  version: 1,
+  columns: [
+    { column:"Date",        field:"date"        },
+    { column:"Description", field:"description" },
+    { column:"Category",    field:"category"    },
+    { column:"Payee",       field:"payee"       },
+    { column:"Amount",      field:"amount"      },
+    { column:"Source",      field:"source"      }
+  ]
+};
+
+const SCHEMA_VERSION = 1;
+
+/* ==================== §1  STORE ================================== */
+// localStorage is the Gate 1 backing store. It is wrapped so that a
+// swap to IndexedDB later touches only this block. If localStorage is
+// unavailable (Safari on file://), we fall back to memory and say so
+// loudly rather than pretending data is safe.
+
+const Store = (() => {
+  const K_ROWS = "sec.rows.v1", K_CONTRACT = "sec.contract.v1";
+  let usable = true, mem = {};
+  try {
+    localStorage.setItem("sec.probe","1");
+    localStorage.removeItem("sec.probe");
+  } catch(e){ usable = false; }
+
+  const get = k => {
+    try { return usable ? localStorage.getItem(k) : (mem[k] ?? null); }
+    catch(e){ return null; }
+  };
+  const set = (k,v) => {
+    try { usable ? localStorage.setItem(k,v) : (mem[k]=v); return true; }
+    catch(e){ return false; }
+  };
+
+  return {
+    persistent: () => usable,
+    loadRows(){
+      try { const r = JSON.parse(get(K_ROWS) || "[]"); return Array.isArray(r) ? r : []; }
+      catch(e){ return []; }
+    },
+    saveRows(rows){
+      const ok = set(K_ROWS, JSON.stringify(rows));
+      if(!ok) alert("Could not save — browser storage is full or blocked. Export a JSON backup now.");
+      return ok;
+    },
+    loadContract(){
+      try {
+        const c = JSON.parse(get(K_CONTRACT) || "null");
+        if(c && Array.isArray(c.columns) && c.columns.length) return c;
+      } catch(e){}
+      return JSON.parse(JSON.stringify(DEFAULT_CONTRACT));
+    },
+    saveContract(c){ set(K_CONTRACT, JSON.stringify(c)); }
+  };
+})();
+
+let ROWS = [];
+let CONTRACT = null;
+
+/* ==================== §2  CSV READ / WRITE ======================= */
+// Self-contained RFC4180 parser: handles quoted fields, embedded
+// commas, embedded newlines and doubled quotes. Deliberately no
+// PapaParse — the file must work offline with zero external requests.
+
+// Each returned row array carries a `.line` property: the 1-based line in the
+// ORIGINAL file where that record started. Blank rows are dropped, so the array
+// index is not the file line — and the skipped-row report must cite the real
+// line or the user looks in the wrong place.
+function parseCSV(text){
+  text = String(text).replace(/^﻿/, "");   // strip BOM
+  const rows = [];
+  let row = [], field = "", i = 0, inQ = false;
+  let line = 1, recStart = 1;
+  const endRecord = () => { row.push(field); field = ""; row.line = recStart; rows.push(row); row = []; };
+  while(i < text.length){
+    const c = text[i];
+    if(inQ){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i += 2; continue; }
+        inQ = false; i++; continue;
+      }
+      if(c === '\n') line++;              // newline inside a quoted field
+      field += c; i++; continue;
+    }
+    if(c === '"'){ inQ = true; i++; continue; }
+    if(c === ','){ row.push(field); field = ""; i++; continue; }
+    if(c === '\r'){ i++; continue; }
+    if(c === '\n'){ endRecord(); line++; recStart = line; i++; continue; }
+    field += c; i++;
+  }
+  if(field.length || row.length) endRecord();
+  // drop rows that are entirely blank (`.line` survives — filter keeps the same arrays)
+  return rows.filter(r => r.some(v => String(v).trim() !== ""));
+}
+
+function csvCell(v){
+  const s = (v === null || v === undefined) ? "" : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function toCSV(header, matrix){
+  return [header.map(csvCell).join(","), ...matrix.map(r => r.map(csvCell).join(","))].join("\r\n");
+}
+function download(name, text, mime){
+  const blob = new Blob([text], { type: (mime||"text/plain") + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+/* ============== §3  COLUMN DETECTION & NORMALISATION ============= */
+
+const COL_PATTERNS = {
+  date:    ["value date","tran date","trans date","posting date","date"],
+  desc:    ["description_raw","description","narration","particulars","details","reference","remarks","memo","payee"],
+  debit:   ["debit","withdrawal","amount dr"," dr","dr ","money out","outflow"],
+  credit:  ["credit","deposit","amount cr"," cr","cr ","money in","inflow","receipt"],
+  amount:  ["amount","value","total"],
+  balance: ["balance","running bal","bal"],
+  category:["category","classification","type"]
+};
+
+// Bank statements often carry preamble rows above the real header.
+// Score the first 25 rows and pick the best header candidate.
+function findHeaderRow(matrix){
+  let best = 0, bestScore = -1;
+  const limit = Math.min(25, matrix.length);
+  for(let r = 0; r < limit; r++){
+    const cells = matrix[r].map(c => String(c).toLowerCase().trim());
+    if(cells.filter(c => c !== "").length < 2) continue;
+    let score = 0;
+    for(const key of Object.keys(COL_PATTERNS)){
+      if(cells.some(c => c && COL_PATTERNS[key].some(p => c.includes(p.trim())))) score++;
+    }
+    if(score > bestScore){ bestScore = score; best = r; }
+  }
+  return { index: best, score: bestScore };
+}
+
+function matchColumn(headers, patterns){
+  for(const p of patterns){
+    const idx = headers.findIndex(h => h.toLowerCase().trim().includes(p.trim()));
+    if(idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function parseAmount(val){
+  if(val === null || val === undefined) return 0;
+  let s = String(val).trim();
+  if(s === "" || s === "-" || s === "—") return 0;
+  const paren = /^\(.*\)$/.test(s);            // (1,234.00) = negative
+  s = s.replace(/[()]/g,"").replace(/[^0-9.\-]/g,"");
+  const n = parseFloat(s);
+  if(isNaN(n)) return 0;
+  return paren ? -n : n;
+}
+
+const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+
+function parseDate(val){
+  if(!val) return null;
+  const s = String(val).trim();
+  let m;
+  // DD-Mon-YY / DD Mon YYYY  (NCBA: 02-Jan-25)
+  if((m = s.match(/^(\d{1,2})[-\s\/]([A-Za-z]{3})[A-Za-z]*[-\s\/](\d{2,4})$/))){
+    const mo = MONTHS[m[2].toLowerCase()];
+    if(mo !== undefined){
+      let y = parseInt(m[3],10); if(m[3].length === 2) y += 2000;
+      return new Date(Date.UTC(y, mo, parseInt(m[1],10)));
+    }
+  }
+  // YYYY-MM-DD
+  if((m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))){
+    return new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+  }
+  // DD/MM/YYYY — day-first (Kenyan/UK convention)
+  if((m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/))){
+    let y = +m[3]; if(m[3].length === 2) y += 2000;
+    return new Date(Date.UTC(y, +m[2]-1, +m[1]));
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+const toISO = d => d ? d.toISOString().slice(0,10) : "";
+
+/* ==================== §4  CATEGORISATION ========================= */
+
+const CAT_KEYWORDS = {
+  "Revenue / Receipts": ["inward","incoming","paybill transfer","mpesa ref","inward clearing","inward telex","eft"],
+  "Labour & Subcontractors": ["labour","salary","casual","supervision","foreman","plaster works","masonry","tiling","welding works","paint works","carpentry","gypsum works","electrical works","plumbing works","painting","subcontract"],
+  "Materials & Project Costs": ["cement","tile","gypsum","paint","hardware","timber","steel","sand","ballast","granite","marble","pipe","wire","glass","aluminium","panel","hardcore","stone","mabati"],
+  "Personal & Household": ["milk","diaper","salon","pizza","food","nanny","school fee","grocery","groceries","carrefour","netflix","uber","gas","airtime","birthday","cake","cloths","cloth","dinner","lunch","cereals","meat","vegetables","charcoal"],
+  "Overheads & Operations": ["rent","bni","accountanc","filing","domain","email","internet","commission","service fee","monthly fee","bank charge","excise duty","overdraft","interest"],
+  "Transfers & Statutory": ["trf to","transfer","mpesa ftx","b2b","internal transfer","rtgs","pesalink","ib outgoing","ib incoming","mobile payment charges","utility payment","ecitizen","ke excise duty","excise duty chg"]
+};
+const CATEGORIES = Object.keys(CAT_KEYWORDS);
+const DEFAULT_CATEGORY = "Overheads & Operations";
+
+// Returns { category, confidence }.
+//   high     — keyword matched, or credit → revenue
+//   inferred — matched only on a short/partial keyword
+//   verify   — nothing matched, defaulted
+function categorise(description, isCredit){
+  if(isCredit) return { category:"Revenue / Receipts", confidence:"high" };
+  const d = String(description || "").toLowerCase();
+  if(!d.trim()) return { category:DEFAULT_CATEGORY, confidence:"verify" };
+  for(const cat of CATEGORIES){
+    for(const kw of CAT_KEYWORDS[cat]){
+      if(d.includes(kw)) return { category:cat, confidence: kw.length >= 6 ? "high" : "inferred" };
+    }
+  }
+  return { category:DEFAULT_CATEGORY, confidence:"verify" };
+}
+
+/* ==================== §5  IMPORT PIPELINE ======================== */
+
+const uid = () => "exp_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8);
+
+function importCSVText(text, filename, includeCredits){
+  const matrix = parseCSV(text);
+  if(matrix.length < 2) throw new Error("File has no data rows.");
+
+  const hdr = findHeaderRow(matrix);
+  const headers = matrix[hdr.index].map(h => String(h).trim());
+  const body = matrix.slice(hdr.index + 1);
+
+  const ci = {
+    date:     matchColumn(headers, COL_PATTERNS.date),
+    desc:     matchColumn(headers, COL_PATTERNS.desc),
+    debit:    matchColumn(headers, COL_PATTERNS.debit),
+    credit:   matchColumn(headers, COL_PATTERNS.credit),
+    amount:   matchColumn(headers, COL_PATTERNS.amount),
+    category: matchColumn(headers, COL_PATTERNS.category)
+  };
+  if(ci.date === -1 && ci.desc === -1)
+    throw new Error("Could not find a date or description column. Detected header: " + headers.join(" | "));
+
+  const imported = [], skipped = [];
+  const now = new Date().toISOString();
+
+  body.forEach((cells, i) => {
+    const lineNo = cells.line ?? (hdr.index + 2 + i);   // real file line
+    const cell = idx => idx === -1 ? "" : String(cells[idx] ?? "").trim();
+
+    const rawDate = cell(ci.date);
+    const desc    = cell(ci.desc);
+
+    // NCBA-style totals row
+    if(/^total/i.test(rawDate) || /^total/i.test(desc)){
+      skipped.push({ line:lineNo, reason:"totals row", text:cells.join(" | ") }); return;
+    }
+
+    const debit  = ci.debit  !== -1 ? Math.abs(parseAmount(cell(ci.debit)))  : 0;
+    const credit = ci.credit !== -1 ? Math.abs(parseAmount(cell(ci.credit))) : 0;
+
+    // Single signed Amount column (no separate debit/credit)
+    let signed = 0;
+    if(ci.debit === -1 && ci.credit === -1 && ci.amount !== -1) signed = parseAmount(cell(ci.amount));
+
+    let amount, isCredit;
+    if(debit > 0)        { amount = debit;            isCredit = false; }
+    else if(credit > 0)  { amount = credit;           isCredit = true;  }
+    else if(signed !== 0){ amount = Math.abs(signed); isCredit = signed > 0; }
+    else {
+      skipped.push({ line:lineNo, reason:"no amount found", text:cells.join(" | ") }); return;
+    }
+
+    if(isCredit && !includeCredits){
+      skipped.push({ line:lineNo, reason:"credit (money in) — excluded", text:desc || cells.join(" | ") }); return;
+    }
+
+    const d = parseDate(rawDate);
+    if(!d){
+      skipped.push({ line:lineNo, reason:"unreadable date: " + (rawDate || "(blank)"), text:cells.join(" | ") }); return;
+    }
+
+    const fileCat = cell(ci.category);
+    const auto = categorise(desc, isCredit);
+
+    imported.push({
+      id: uid(),
+      date: toISO(d),
+      description: desc || "(no description)",
+      category: fileCat || auto.category,
+      payee: "",
+      amount: isCredit ? -amount : amount,   // expenses positive, money in negative
+      source: filename,
+      confidence: fileCat ? "high" : auto.confidence,
+      origin: "import",
+      notes: "",
+      createdAt: now, updatedAt: now,
+      raw: headers.reduce((o,h,k) => (o[h || ("col"+k)] = cells[k] ?? "", o), {})
+    });
+  });
+
+  return {
+    imported, skipped, headers,
+    sourceRowCount: body.length,
+    headerLine: matrix[hdr.index].line ?? (hdr.index + 1),
+    reconciled: imported.length + skipped.length === body.length
+  };
+}
+
+function renderImportResult(res, filename){
+  const el = document.getElementById("importResult");
+  const gap = res.sourceRowCount - (res.imported.length + res.skipped.length);
+  const recon = res.reconciled
+    ? `<div class="note ok"><b>Reconciled.</b> All ${res.sourceRowCount} data rows accounted for — ${res.imported.length} imported, ${res.skipped.length} skipped with a reason.</div>`
+    : `<div class="note err"><b>MISMATCH.</b> ${res.sourceRowCount} data rows but only ${res.imported.length + res.skipped.length} accounted for (${gap} unexplained). Do not trust totals until this is resolved.</div>`;
+
+  const skipRows = res.skipped.slice(0,60).map(s =>
+    `<tr><td class="num">${s.line}</td><td>${esc(s.reason)}</td><td class="desc">${esc(s.text).slice(0,140)}</td></tr>`).join("");
+
+  el.innerHTML = `
+    <div class="card">
+      <h2>Parse result — ${esc(filename)}</h2>
+      ${recon}
+      <div class="kpis" style="margin-bottom:14px">
+        <div class="kpi"><div class="v">${res.sourceRowCount}</div><div class="l">Data rows in file</div></div>
+        <div class="kpi"><div class="v">${res.imported.length}</div><div class="l">Ready to import</div></div>
+        <div class="kpi"><div class="v">${res.skipped.length}</div><div class="l">Skipped</div></div>
+      </div>
+      <p class="hint">Header found on line ${res.headerLine}: <code>${esc(res.headers.join(" | "))}</code></p>
+      <div class="row">
+        <button class="btn" id="commitImport" ${res.imported.length ? "" : "disabled"}>Add ${res.imported.length} rows to ledger</button>
+        <button class="btn ghost" id="cancelImport">Discard</button>
+      </div>
+    </div>
+    ${res.imported.length ? `<div class="card"><h2>Preview (first 15)</h2>${tableHTML(res.imported.slice(0,15))}</div>` : ""}
+    ${res.skipped.length ? `<div class="card"><h2>Skipped rows — nothing vanishes silently</h2>
+      <div class="tablewrap"><table><thead><tr><th>Line</th><th>Reason</th><th>Row</th></tr></thead>
+      <tbody>${skipRows}</tbody></table></div>
+      ${res.skipped.length > 60 ? `<p class="hint" style="margin-top:10px">Showing first 60 of ${res.skipped.length}.</p>` : ""}
+    </div>` : ""}`;
+
+  const commit = document.getElementById("commitImport");
+  if(commit) commit.onclick = () => {
+    ROWS = ROWS.concat(res.imported);
+    Store.saveRows(ROWS);
+    el.innerHTML = `<div class="note ok"><b>Imported.</b> ${res.imported.length} rows added. Open the Ledger tab to review.</div>`;
+    refreshAll();
+  };
+  const cancel = document.getElementById("cancelImport");
+  if(cancel) cancel.onclick = () => { el.innerHTML = ""; };
+}
+
+/* ==================== §6  MANUAL ENTRY =========================== */
+
+function fillCategorySelects(){
+  const used = Array.from(new Set(ROWS.map(r => r.category).filter(Boolean)));
+  const all  = Array.from(new Set(CATEGORIES.concat(used)));
+
+  const sel = document.getElementById("fCategory");
+  const cur = sel.value;
+  sel.innerHTML = all.map(c => `<option>${esc(c)}</option>`).join("");
+  if(cur && all.includes(cur)) sel.value = cur;
+
+  const flt = document.getElementById("fCatFilter");
+  const curF = flt.value;
+  flt.innerHTML = `<option value="">All categories</option>` + all.map(c => `<option>${esc(c)}</option>`).join("");
+  if(curF && all.includes(curF)) flt.value = curF;
+}
+
+function resetEntryForm(){
+  document.getElementById("entryForm").reset();
+  document.getElementById("fId").value = "";
+  document.getElementById("fDate").value = new Date().toISOString().slice(0,10);
+  document.getElementById("entryTitle").textContent = "Add an expense";
+  document.getElementById("entrySubmit").textContent = "Save entry";
+}
+
+function editRow(id){
+  const r = ROWS.find(x => x.id === id);
+  if(!r) return;
+  fillCategorySelects();
+  document.getElementById("fId").value = r.id;
+  document.getElementById("fDate").value = r.date;
+  document.getElementById("fAmount").value = r.amount;
+  document.getElementById("fCategory").value = r.category;
+  document.getElementById("fPayee").value = r.payee || "";
+  document.getElementById("fDescription").value = r.description;
+  document.getElementById("fSource").value = r.source || "";
+  document.getElementById("fNotes").value = r.notes || "";
+  document.getElementById("entryTitle").textContent = "Edit entry";
+  document.getElementById("entrySubmit").textContent = "Update entry";
+  showTab("entry");
+}
+
+document.getElementById("entryForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const id = document.getElementById("fId").value;
+  const now = new Date().toISOString();
+  const data = {
+    date: document.getElementById("fDate").value,
+    amount: parseFloat(document.getElementById("fAmount").value) || 0,
+    category: document.getElementById("fCategory").value,
+    payee: document.getElementById("fPayee").value.trim(),
+    description: document.getElementById("fDescription").value.trim(),
+    source: document.getElementById("fSource").value.trim() || "Manual",
+    notes: document.getElementById("fNotes").value.trim(),
+    updatedAt: now
+  };
+  if(id){
+    const i = ROWS.findIndex(r => r.id === id);
+    if(i !== -1) ROWS[i] = Object.assign({}, ROWS[i], data);
+  } else {
+    ROWS.push(Object.assign({
+      id: uid(), confidence:"high", origin:"manual", createdAt: now, raw:{}
+    }, data));
+  }
+  Store.saveRows(ROWS);
+  resetEntryForm();
+  refreshAll();
+  showTab("ledger");
+});
+document.getElementById("entryReset").onclick = resetEntryForm;
+
+/* ==================== §7  LEDGER ================================= */
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => (n < 0 ? "-" : "") + Math.abs(Number(n) || 0)
+  .toLocaleString("en-KE", { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+function tableHTML(rows, clickable){
+  if(!rows.length) return `<div class="empty">Nothing to show.</div>`;
+  return `<div class="tablewrap"><table>
+    <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Payee</th>
+      <th class="num">Amount</th><th>Source</th><th>Conf.</th>${clickable ? "<th></th>" : ""}</tr></thead>
+    <tbody>${rows.map(r => `
+      <tr ${clickable ? `data-id="${esc(r.id)}" style="cursor:pointer"` : ""}>
+        <td class="mono">${esc(r.date)}</td>
+        <td class="desc">${esc(r.description)}</td>
+        <td>${esc(r.category)}</td>
+        <td>${esc(r.payee || "")}</td>
+        <td class="num">${money(r.amount)}</td>
+        <td>${esc(r.source || "")}</td>
+        <td><span class="chip ${esc(r.confidence || "")}">${esc(r.confidence || "—")}</span></td>
+        ${clickable ? `<td><button class="btn danger" data-del="${esc(r.id)}" style="padding:3px 9px;font-size:12px">Delete</button></td>` : ""}
+      </tr>`).join("")}
+    </tbody></table></div>`;
+}
+
+function visibleRows(){
+  const q = document.getElementById("q").value.toLowerCase().trim();
+  const cat = document.getElementById("fCatFilter").value;
+  return ROWS.filter(r => {
+    if(cat && r.category !== cat) return false;
+    if(!q) return true;
+    return [r.description, r.payee, r.category, r.source].some(v => String(v||"").toLowerCase().includes(q));
+  }).sort((a,b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+function renderLedger(){
+  const rows = visibleRows();
+  document.getElementById("ledgerOut").innerHTML = ROWS.length
+    ? tableHTML(rows, true)
+    : `<div class="empty">No rows yet. Import a CSV or add an entry.</div>`;
+
+  document.querySelectorAll("#ledgerOut tr[data-id]").forEach(tr => {
+    tr.onclick = e => {
+      if(e.target.dataset.del) return;
+      editRow(tr.dataset.id);
+    };
+  });
+  document.querySelectorAll("#ledgerOut [data-del]").forEach(b => {
+    b.onclick = e => {
+      e.stopPropagation();
+      const r = ROWS.find(x => x.id === b.dataset.del);
+      if(!r || !confirm(`Delete this row?\n\n${r.date} · ${r.description} · ${money(r.amount)}`)) return;
+      ROWS = ROWS.filter(x => x.id !== b.dataset.del);
+      Store.saveRows(ROWS); refreshAll();
+    };
+  });
+
+  const out = rows.filter(r => r.amount > 0).reduce((a,r) => a + r.amount, 0);
+  const inn = rows.filter(r => r.amount < 0).reduce((a,r) => a - r.amount, 0);
+  const verify = rows.filter(r => r.confidence === "verify").length;
+  document.getElementById("kpis").innerHTML = `
+    <div class="kpi"><div class="v">${rows.length}</div><div class="l">Rows shown</div></div>
+    <div class="kpi"><div class="v">${money(out)}</div><div class="l">Total expenses</div></div>
+    <div class="kpi"><div class="v">${money(inn)}</div><div class="l">Money in</div></div>
+    <div class="kpi"><div class="v">${verify}</div><div class="l">Need review</div></div>`;
+}
+
+document.getElementById("q").oninput = renderLedger;
+document.getElementById("fCatFilter").onchange = renderLedger;
+document.getElementById("clearAll").onclick = () => {
+  if(!ROWS.length) return;
+  if(!confirm(`Delete all ${ROWS.length} rows? This cannot be undone.\n\nExport a JSON backup first if unsure.`)) return;
+  ROWS = []; Store.saveRows(ROWS); refreshAll();
+};
+
+/* ==================== §8  EXPORT ================================= */
+
+// Export order is date ascending, tie-broken by creation time, so the same
+// ledger always produces a byte-identical file. Never storage order.
+function exportRows(){
+  return ROWS.slice().sort((a,b) =>
+    (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) ||
+    String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+}
+
+function contractMatrix(){
+  return exportRows().map(r => CONTRACT.columns.map(c => {
+    if(!c.field) return "";
+    const v = r[c.field];
+    if(c.field === "amount") return (Number(v) || 0).toFixed(2);
+    return v ?? "";
+  }));
+}
+function contractHeader(){ return CONTRACT.columns.map(c => c.column); }
+
+function renderCsvPreview(){
+  const el = document.getElementById("csvPreview");
+  if(!ROWS.length){ el.textContent = "No rows yet."; return; }
+  const m = contractMatrix().slice(0,5);
+  el.textContent = toCSV(contractHeader(), m).replace(/\r/g,"")
+    + (ROWS.length > 5 ? `\n… ${ROWS.length - 5} more rows` : "");
+}
+
+document.getElementById("expCsv").onclick = () => {
+  if(!ROWS.length) return alert("Nothing to export yet.");
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g,"");
+  download(`Simplified_Expenses_${stamp}.csv`, toCSV(contractHeader(), contractMatrix()), "text/csv");
+};
+document.getElementById("expJson").onclick = () => {
+  const payload = {
+    schemaVersion: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    contract: CONTRACT,
+    rowCount: ROWS.length,
+    rows: ROWS
+  };
+  download(`expense-console-backup-${Date.now()}.json`, JSON.stringify(payload,null,2), "application/json");
+};
+document.getElementById("impJson").onclick = () => document.getElementById("jsonFile").click();
+document.getElementById("jsonFile").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const p = JSON.parse(fr.result);
+      if(!Array.isArray(p.rows)) throw new Error("No rows array in file.");
+      if(!confirm(`Restore ${p.rows.length} rows?\n\nThis REPLACES the ${ROWS.length} rows currently stored.`)) return;
+      ROWS = p.rows;
+      if(p.contract && Array.isArray(p.contract.columns)){ CONTRACT = p.contract; Store.saveContract(CONTRACT); }
+      Store.saveRows(ROWS); refreshAll();
+      alert(`Restored ${ROWS.length} rows.`);
+    } catch(err){ alert("Could not read that JSON backup: " + err.message); }
+  };
+  fr.readAsText(f);
+  e.target.value = "";
+};
+
+/* ==================== §9  CONTRACT TAB =========================== */
+
+function renderContract(){
+  const isDefault = JSON.stringify(CONTRACT.columns) === JSON.stringify(DEFAULT_CONTRACT.columns);
+  document.getElementById("contractStatus").innerHTML = isDefault
+    ? `<div class="note warn"><b>Provisional contract.</b> These 6 columns are a best-guess default. Upload your reference export below and adopt its header to make the contract authoritative.</div>`
+    : `<div class="note ok"><b>Custom contract in force.</b> ${CONTRACT.columns.length} columns, adopted from a reference file or edited by hand.</div>`;
+
+  document.getElementById("contractRows").innerHTML = CONTRACT.columns.map((c,i) => `
+    <tr>
+      <td class="num">${i+1}</td>
+      <td class="mono">${esc(c.column)}</td>
+      <td><select data-map="${i}" style="min-width:160px">
+        <option value="">— leave blank —</option>
+        ${FIELDS.map(f => `<option value="${f}" ${c.field === f ? "selected" : ""}>${f}</option>`).join("")}
+      </select></td>
+    </tr>`).join("");
+
+  document.querySelectorAll("[data-map]").forEach(sel => {
+    sel.onchange = () => {
+      CONTRACT.columns[+sel.dataset.map].field = sel.value;
+      Store.saveContract(CONTRACT);
+      renderCsvPreview();
+    };
+  });
+}
+
+document.getElementById("contractReset").onclick = () => {
+  if(!confirm("Reset the column contract to the 6 default columns?")) return;
+  CONTRACT = JSON.parse(JSON.stringify(DEFAULT_CONTRACT));
+  Store.saveContract(CONTRACT); refreshAll();
+};
+
+// Guess which internal field a reference-file column means.
+function guessField(header){
+  const h = header.toLowerCase().trim();
+  if(/date/.test(h)) return "date";
+  if(/desc|narrat|particular|detail|memo|remark/.test(h)) return "description";
+  if(/categ|class|type/.test(h)) return "category";
+  if(/payee|vendor|supplier|merchant|client|counterpart/.test(h)) return "payee";
+  if(/amount|value|total|kes|ksh/.test(h)) return "amount";
+  if(/source|origin|file|account|bank/.test(h)) return "source";
+  if(/conf/.test(h)) return "confidence";
+  if(/note|comment/.test(h)) return "notes";
+  if(/^id$|ref/.test(h)) return "id";
+  return "";
+}
+
+function handleReference(text, filename){
+  const matrix = parseCSV(text);
+  const el = document.getElementById("refResult");
+  if(!matrix.length){ el.innerHTML = `<div class="note err">That file is empty.</div>`; return; }
+
+  const hdr = findHeaderRow(matrix);
+  const refHeaders = matrix[hdr.index].map(h => String(h).trim());
+  const dataRows = matrix.length - hdr.index - 1;
+  const mine = contractHeader();
+
+  const same = refHeaders.length === mine.length &&
+               refHeaders.every((h,i) => h.toLowerCase() === mine[i].toLowerCase());
+
+  const cmp = Math.max(refHeaders.length, mine.length);
+  let rows = "";
+  for(let i = 0; i < cmp; i++){
+    const a = refHeaders[i] ?? "", b = mine[i] ?? "";
+    const ok = a.toLowerCase() === b.toLowerCase();
+    rows += `<tr>
+      <td class="num">${i+1}</td>
+      <td class="mono">${esc(a) || "<em style='opacity:.5'>—</em>"}</td>
+      <td class="mono">${esc(b) || "<em style='opacity:.5'>—</em>"}</td>
+      <td>${ok ? '<span class="chip high">match</span>' : '<span class="chip verify">differs</span>'}</td>
+    </tr>`;
+  }
+
+  el.innerHTML = `
+    ${same
+      ? `<div class="note ok"><b>Contract matches the reference file exactly.</b> ${refHeaders.length} columns, ${dataRows} data rows in <code>${esc(filename)}</code>. Gate 1 export contract is validated.</div>`
+      : `<div class="note warn"><b>Contract differs from the reference file.</b> <code>${esc(filename)}</code> has ${refHeaders.length} columns and ${dataRows} data rows. Adopt its header below to make the contract authoritative.</div>`}
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>Reference file</th><th>Current contract</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    ${same ? "" : `<div class="row" style="margin-top:14px">
+      <button class="btn" id="adoptHeader">Adopt the reference header as the contract</button>
+    </div>`}`;
+
+  const adopt = document.getElementById("adoptHeader");
+  if(adopt) adopt.onclick = () => {
+    CONTRACT = {
+      version: CONTRACT.version + 1,
+      adoptedFrom: filename,
+      adoptedAt: new Date().toISOString(),
+      columns: refHeaders.map(h => ({ column:h, field:guessField(h) }))
+    };
+    Store.saveContract(CONTRACT);
+    refreshAll();
+    el.innerHTML = `<div class="note ok"><b>Adopted.</b> The contract is now the ${refHeaders.length} columns from <code>${esc(filename)}</code>. Check the field mapping above — any column showing “leave blank” needs a field picked.</div>`;
+  };
+}
+
+/* ==================== §10  BOOT ================================== */
+
+function wireDrop(dropId, inputId, onText){
+  const drop = document.getElementById(dropId), input = document.getElementById(inputId);
+  const read = f => {
+    if(!f) return;
+    const fr = new FileReader();
+    fr.onload = () => { try { onText(fr.result, f.name); } catch(err){ alert("Could not read that file: " + err.message); } };
+    fr.onerror = () => alert("Could not read that file.");
+    fr.readAsText(f);
+  };
+  drop.onclick = () => input.click();
+  input.onchange = e => { read(e.target.files[0]); e.target.value = ""; };
+  ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add("over");
+  }));
+  ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove("over");
+  }));
+  drop.addEventListener("drop", e => read(e.dataTransfer.files[0]));
+}
+
+wireDrop("drop","file",(text,name) => {
+  const res = importCSVText(text, name, document.getElementById("optCredits").checked);
+  renderImportResult(res, name);
+});
+wireDrop("refDrop","refFile", handleReference);
+
+function showTab(name){
+  document.querySelectorAll("nav button").forEach(b =>
+    b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  document.querySelectorAll("section[role=tabpanel]").forEach(s =>
+    s.hidden = s.id !== "tab-" + name);
+  window.scrollTo(0,0);
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+function refreshAll(){
+  fillCategorySelects();
+  renderLedger();
+  renderCsvPreview();
+  renderContract();
+  document.getElementById("hdrCount").textContent = ROWS.length + (ROWS.length === 1 ? " row" : " rows");
+  document.getElementById("hdrStore").textContent = Store.persistent() ? "saved in this browser" : "MEMORY ONLY";
+}
+
+(function boot(){
+  CONTRACT = Store.loadContract();
+  ROWS = Store.loadRows();
+  if(!Store.persistent()){
+    document.getElementById("storeWarn").innerHTML =
+      `<div class="note err"><b>Storage is blocked in this browser.</b> Your data lives in memory only and will be lost when you close the tab. Export a JSON backup before you finish. (Common when opening from <code>file://</code> in Safari — use Chrome or Firefox, or serve the file over http.)</div>`;
+  }
+  resetEntryForm();
+  refreshAll();
+})();
+</script>
+</body>
+</html>
